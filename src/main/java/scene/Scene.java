@@ -22,7 +22,7 @@ public class Scene {
 
     private final Map<String, Phaser> personBarriers;
     private final Map<String, List<Phrase>> personSpeech;
-    private String firstPerson;
+    private String firstPerson = null;
 
     public Scene() {
         personBarriers = PERSON.stream().collect(Collectors.toMap(Function.identity(), ignored -> new Phaser(2)));
@@ -30,12 +30,8 @@ public class Scene {
     }
 
     public void read(final BufferedReader reader) throws IOException {
-        String previousPerson = null;
-        while (true) {
-            final String line = reader.readLine();
-            if (line == null) {
-                break;
-            }
+        record Line(String person, String text) {}
+        List<Line> script = reader.lines().map(line -> {
             final int index = line.indexOf(":");
             if (index == -1) {
                 throw new IllegalArgumentException("Invalid input format");
@@ -44,11 +40,15 @@ public class Scene {
             if (!PERSON.contains(person)) {
                 throw new IllegalArgumentException(STR."Invalid name: \{person}");
             }
-            personSpeech.get(person).add(new Phrase(line.substring(index + 1), previousPerson));
-            if (previousPerson == null) {
-                firstPerson = person;
-            }
-            previousPerson = person;
+            return new Line(person, line.substring(index + 1));
+        }).toList();
+        if (!script.isEmpty()) {
+            firstPerson = script.getFirst().person();
+        }
+        for (int i = 0; i < script.size(); ++i) {
+            Line line = script.get(i);
+            personSpeech.get(line.person()).add(
+                    new Phrase(line.text(), i + 1 < script.size() ? script.get(i + 1).person() : null));
         }
     }
 
@@ -56,19 +56,22 @@ public class Scene {
         try (ExecutorService executor = Executors.newFixedThreadPool(PERSON.size())) {
             PERSON.forEach(person -> executor.submit(() -> {
                                 for (final Phrase phrase : personSpeech.get(person)) {
-                                    if (phrase.previousPerson() != null) {
-                                        personBarriers.get(phrase.previousPerson()).arriveAndAwaitAdvance();
-                                    }
+                                    personBarriers.get(person).arriveAndAwaitAdvance();
                                     writer.write(FMT."\{person}:\{phrase.text()}\n");
-                                    personBarriers.get(person).arrive();
+                                    if (phrase.nextPerson() != null) {
+                                        personBarriers.get(phrase.nextPerson()).arrive();
+                                    }
                                 }
                                 return null;
                             }
                     )
             );
+            if (firstPerson != null) {
+                personBarriers.get(firstPerson).arrive();
+            }
         }
     }
 
-    private record Phrase(String text, String previousPerson) {
+    private record Phrase(String text, String nextPerson) {
     }
 }
