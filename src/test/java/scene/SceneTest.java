@@ -50,19 +50,25 @@ class SceneTest {
     }
 
     @Test
-    @DisplayName("Script where one line doesn't have person")
+    @DisplayName("One line doesn't have a person")
     void test_noPerson() {
         testInvalid(randomText());
     }
 
     @Test
-    @DisplayName("Script where one line has unknown person")
+    @DisplayName("One line doesn't have space after :")
+    void test_noSpace() {
+        testInvalid(STR."\{PERSON.getFirst()}:\{randomText()}");
+    }
+
+    @Test
+    @DisplayName("One line has unknown person")
     void test_wrongPerson() {
         testInvalid(STR."Elon: \{randomText()}");
     }
 
     @Test
-    @DisplayName("Check valid script")
+    @DisplayName("Valid script")
     void test_valid() {
         IntStream.range(0, 1000).forEach(ignored -> test(generateInput(1000).toList()));
     }

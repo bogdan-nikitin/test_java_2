@@ -14,6 +14,19 @@ import java.util.stream.Collectors;
 
 import static java.util.FormatProcessor.FMT;
 
+/**
+ * Scene with 6 characters: Chandler, Joey, Monica, Phoebe, Rachel and Ross.
+ * Each character has its lines and writes them in separate thread.
+ *
+ * Script has the following format:
+ * <pre>
+ * character1: line1
+ * character2: line2
+ * characterN: lineN
+ * </pre>
+ *
+ * Methods of this class cannot be called simultaneously.
+ */
 public class Scene {
     private static final Set<String> PERSON = Set.of(
             "Chandler", "Joey", "Monica", "Phoebe", "Rachel", "Ross"
@@ -23,16 +36,31 @@ public class Scene {
     private final Map<String, List<Phrase>> personSpeech;
     private String firstPerson = null;
 
+    /**
+     * Constructs empty scene.
+     */
     public Scene() {
         personBarriers = PERSON.stream().collect(Collectors.toMap(Function.identity(), ignored -> new Phaser(2)));
         personSpeech = PERSON.stream().collect(Collectors.toMap(Function.identity(), ignored -> new ArrayList<>()));
     }
 
+    /**
+     * Reads script from {@code BufferedReader}.
+     * Script must have the following format:
+     * <pre>
+     * character1: line1
+     * character2: line2
+     * characterN: lineN
+     * </pre>
+     * @param reader reader to read script from.
+     * @throws IOException if IO error occurs.
+     * @throws IllegalArgumentException if script has invalid format.
+     */
     public void read(final BufferedReader reader) throws IOException {
         record Line(String person, String text) {
         }
         List<Line> script = reader.lines().map(line -> {
-            final int index = line.indexOf(":");
+            final int index = line.indexOf(": ");
             if (index == -1) {
                 throw new IllegalArgumentException("Invalid input format");
             }
@@ -40,7 +68,7 @@ public class Scene {
             if (!PERSON.contains(person)) {
                 throw new IllegalArgumentException(STR."Invalid name: \{person}");
             }
-            return new Line(person, line.substring(index + 1));
+            return new Line(person, line.substring(index + 2));
         }).toList();
         if (!script.isEmpty()) {
             firstPerson = script.getFirst().person();
@@ -52,20 +80,31 @@ public class Scene {
         }
     }
 
+    /**
+     * Writes script to provided {@code OutputStreamWriter}.
+     * Each character write its line in separate thread.
+     * @param writer writer to write script to.
+     * @throws IOException if IO error occurs.
+     */
     public void write(final OutputStreamWriter writer) throws IOException {
-        final List<Thread> threads = PERSON.stream().map(person -> new Thread(() -> {
-            for (final Phrase phrase : personSpeech.get(person)) {
-                personBarriers.get(person).arriveAndAwaitAdvance();
-                try {
-                    writer.write(FMT."\{person}:\{phrase.text()}\n");
-                } catch (final IOException e) {
-                    throw new UncheckedIOException(e);
+        final List<Thread> threads;
+        try {
+            threads = PERSON.stream().map(person -> new Thread(() -> {
+                for (final Phrase phrase : personSpeech.get(person)) {
+                    personBarriers.get(person).arriveAndAwaitAdvance();
+                    try {
+                        writer.write(FMT."\{person}: \{phrase.text()}\n");
+                    } catch (final IOException e) {
+                        throw new UncheckedIOException(e);
+                    }
+                    if (phrase.nextPerson() != null) {
+                        personBarriers.get(phrase.nextPerson()).arrive();
+                    }
                 }
-                if (phrase.nextPerson() != null) {
-                    personBarriers.get(phrase.nextPerson()).arrive();
-                }
-            }
-        })).toList();
+            })).toList();
+        } catch (final UncheckedIOException e) {
+            throw e.getCause();
+        }
         threads.forEach(Thread::start);
         if (firstPerson != null) {
             personBarriers.get(firstPerson).arrive();
