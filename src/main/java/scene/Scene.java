@@ -3,6 +3,7 @@ package scene;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
+import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -53,22 +54,34 @@ public class Scene {
     }
 
     public void write(final OutputStreamWriter writer) throws IOException {
-        try (ExecutorService executor = Executors.newFixedThreadPool(PERSON.size())) {
-            PERSON.forEach(person -> executor.submit(() -> {
-                                for (final Phrase phrase : personSpeech.get(person)) {
-                                    personBarriers.get(person).arriveAndAwaitAdvance();
-                                    writer.write(FMT."\{person}:\{phrase.text()}\n");
-                                    if (phrase.nextPerson() != null) {
-                                        personBarriers.get(phrase.nextPerson()).arrive();
-                                    }
-                                }
-                                return null;
-                            }
-                    )
-            );
-            if (firstPerson != null) {
-                personBarriers.get(firstPerson).arrive();
+        final List<Thread> threads = PERSON.stream().map(person -> new Thread(() -> {
+                    for (final Phrase phrase : personSpeech.get(person)) {
+                        personBarriers.get(person).arriveAndAwaitAdvance();
+                        try {
+                            writer.write(FMT."\{person}:\{phrase.text()}\n");
+                        } catch (final IOException e) {
+                            throw new UncheckedIOException(e);
+                        }
+                        if (phrase.nextPerson() != null) {
+                            personBarriers.get(phrase.nextPerson()).arrive();
+                        }
+                    }
+                })).toList();
+        threads.forEach(Thread::start);
+        if (firstPerson != null) {
+            personBarriers.get(firstPerson).arrive();
+        }
+        boolean interrupted = Thread.interrupted();
+        for (int i = 0; i < threads.size();) {
+            try {
+                threads.get(i).join();
+                ++i;
+            } catch (final InterruptedException e) {
+                interrupted = true;
             }
+        }
+        if (interrupted) {
+            Thread.currentThread().interrupt();
         }
     }
 
