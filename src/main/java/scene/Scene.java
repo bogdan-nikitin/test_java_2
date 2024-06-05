@@ -26,6 +26,8 @@ import static java.util.FormatProcessor.FMT;
  * </pre>
  *
  * Methods of this class cannot be called simultaneously.
+ *
+ * @author Bogdan Nikitin
  */
 public class Scene {
     private static final Set<String> PERSON = Set.of(
