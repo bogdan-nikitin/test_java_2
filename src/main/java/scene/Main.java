@@ -14,6 +14,7 @@ public class Main {
             scene.write(writer);
             writer.flush();
         } catch (final IOException e) {
+            System.err.println(STR."IO error occurred: \{e.getMessage()}");
         }
     }
 }
