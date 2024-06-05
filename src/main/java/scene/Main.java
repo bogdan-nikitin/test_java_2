@@ -33,6 +33,8 @@ public class Main {
             writer.flush();
         } catch (final IOException e) {
             System.err.println(STR."IO error occurred: \{e.getMessage()}");
+        } catch (final IllegalArgumentException e) {
+            System.err.println(STR."Input has invalid format: \{e.getMessage()}");
         }
     }
 }

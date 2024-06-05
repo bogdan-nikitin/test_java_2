@@ -64,7 +64,7 @@ public class Scene {
         List<Line> script = reader.lines().map(line -> {
             final int index = line.indexOf(": ");
             if (index == -1) {
-                throw new IllegalArgumentException("Invalid input format");
+                throw new IllegalArgumentException("No separator");
             }
             final String person = line.substring(0, index);
             if (!PERSON.contains(person)) {
