@@ -1,8 +1,8 @@
 package scene;
 
 import java.io.BufferedReader;
-import java.io.BufferedWriter;
 import java.io.IOException;
+import java.io.OutputStreamWriter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -13,6 +13,8 @@ import java.util.concurrent.Phaser;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static java.util.FormatProcessor.FMT;
+
 public class Scene {
     private static final Set<String> PERSON = Set.of(
             "Chandler", "Joey", "Monica", "Phoebe", "Rachel", "Ross"
@@ -20,13 +22,10 @@ public class Scene {
 
     private final Map<String, Phaser> personBarriers;
     private final Map<String, List<Phrase>> personSpeech;
-
-
-    private record Phrase(String text, String previousPerson) {}
     private String firstPerson;
 
     public Scene() {
-        personBarriers = PERSON.stream().collect(Collectors.toMap(Function.identity(), ignored -> new Phaser(1)));
+        personBarriers = PERSON.stream().collect(Collectors.toMap(Function.identity(), ignored -> new Phaser(2)));
         personSpeech = PERSON.stream().collect(Collectors.toMap(Function.identity(), ignored -> new ArrayList<>()));
     }
 
@@ -46,12 +45,30 @@ public class Scene {
                 throw new IllegalArgumentException(STR."Invalid name: \{person}");
             }
             personSpeech.get(person).add(new Phrase(line.substring(index + 1), previousPerson));
+            if (previousPerson == null) {
+                firstPerson = person;
+            }
             previousPerson = person;
         }
     }
 
-    public void write(final BufferedWriter writer) throws IOException {
+    public void write(final OutputStreamWriter writer) throws IOException {
         try (ExecutorService executor = Executors.newFixedThreadPool(PERSON.size())) {
+            PERSON.forEach(person -> executor.submit(() -> {
+                                for (final Phrase phrase : personSpeech.get(person)) {
+                                    if (phrase.previousPerson() != null) {
+                                        personBarriers.get(phrase.previousPerson()).arriveAndAwaitAdvance();
+                                    }
+                                    writer.write(FMT."\{person}:\{phrase.text()}\n");
+                                    personBarriers.get(person).arrive();
+                                }
+                                return null;
+                            }
+                    )
+            );
         }
+    }
+
+    private record Phrase(String text, String previousPerson) {
     }
 }
